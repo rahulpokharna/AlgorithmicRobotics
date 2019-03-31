@@ -33,8 +33,6 @@ typedef struct{
 void ts_map_init (ts_map_t *map ) ;
 int ts_distance_scan_to_map(ts_scan_t *scan, ts_map_t *map, ts_position_t *pos);
 void ts_map_update(ts_scan_t *scan , ts_map_t *map, ts_position_t *position, int quality);
-int main() {
-return 0;
-}
+
 
 #endif //_TINYSLAM_H_
