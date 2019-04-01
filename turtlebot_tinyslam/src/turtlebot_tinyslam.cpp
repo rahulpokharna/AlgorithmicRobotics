@@ -5,24 +5,24 @@
 
 // Any other includes
 
-int ts_distance_scan_to_map(ts_scan_t *scan, ts_map_t *map, ts_position_t *pos) 
+int ts_distance_scan_to_map(ts_scan_t &scan, ts_map_t &map, ts_position_t &pos) 
 {
 	double c, s;
 	int i, x, y, nb_points = 0;
 	int64_t sum;
 
-	c = cos(pos->theta * M_PI / 180);
-	s = sin(pos->theta * M_PI / 180);
+	c = cos(pos.theta * M_PI / 180);
+	s = sin(pos.theta * M_PI / 180);
 
 	//Translate and rotate scan to robot position and compute the distance
 
-	for(i = 0, sum = 0; i != scan->nb_points; i++) {
-		if(scan->value[i] != TS_NO_OBSTACLE) {
-			x = (int) floor((pos->x + c * scan->x[i] - s * scan->y[i]) * TS_MAP_SCALE + 0.5);
-			y = (int) floor((pos->y + s * scan->x[i] + c * scan->y[i]) * TS_MAP_SCALE + 0.5);
+	for(i = 0, sum = 0; i != scan.nb_points; i++) {
+		if(scan.value[i] != TS_NO_OBSTACLE) {
+			x = (int) floor((pos.x + c * scan.x[i] - s * scan.y[i]) * TS_MAP_SCALE + 0.5);
+			y = (int) floor((pos.y + s * scan.x[i] + c * scan.y[i]) * TS_MAP_SCALE + 0.5);
 			//Check boundaries
 			if(x >= 0 && x < TS_MAP_SIZE && y >= 0 && y < TS_MAP_SIZE) {
-				sum += map->map[y * TS_MAP_SIZE + x];
+				sum += map.map[y * TS_MAP_SIZE + x];
 				nb_points++;
 			}
 		}
@@ -32,12 +32,12 @@ int ts_distance_scan_to_map(ts_scan_t *scan, ts_map_t *map, ts_position_t *pos)
 	return (int) sum;
 }
 
-void ts_map_init(ts_map_t *map)
+void ts_map_init(ts_map_t &map)
 {
 	int x, y, initval;
 	ts_map_pixel_t *ptr;
 	initval = (TS_OBSTACLE + TS_NO_OBSTACLE) / 2;
-	for(ptr = map->map, y = 0; y < TS_MAP_SIZE; y++) {
+	for(ptr = map.map, y = 0; y < TS_MAP_SIZE; y++) {
 		for(x = 0; x < TS_MAP_SIZE; x++, ptr++) {
 			*ptr = initval;
 		}
@@ -46,7 +46,7 @@ void ts_map_init(ts_map_t *map)
 
 #define SWAP(x, y) (x^= y ^= x ^= y)
 
-void ts_map_laser_ray(ts_map_t *map, int x1, int y1, int x2, int y2, int xp, int yp, int value, int alpha) {
+void ts_map_laser_ray(ts_map_t &map, int x1, int y1, int x2, int y2, int xp, int yp, int value, int alpha) {
 	int x2c, y2c, dx, dy, dxc, dyc, error, errorv, derrorv, x;
 	int incv, sincv, incerrorv, incptrx, incptry, pixval, horiz, diago;
 	
@@ -98,7 +98,7 @@ void ts_map_laser_ray(ts_map_t *map, int x1, int y1, int x2, int y2, int xp, int
 	errorv = derrorv / 2;
 	incv = (value-TS_NO_OBSTACLE) /derrorv;
 	incerrorv = value-TS_NO_OBSTACLE-derrorv*incv;
-	ptr = map->map + y1*TS_MAP_SIZE + x1;
+	ptr = map.map + y1*TS_MAP_SIZE + x1;
 	pixval = TS_NO_OBSTACLE;
 	for(x = 0; x <= dxc; x++, ptr += incptrx) {
 		if(x > dx-2*derrorv) {
@@ -129,29 +129,29 @@ void ts_map_laser_ray(ts_map_t *map, int x1, int y1, int x2, int y2, int xp, int
 }
 
 
-void ts_map_update(ts_scan_t *scan, ts_map_t *map, ts_position_t *pos,int quality)
+void ts_map_update(ts_scan_t &scan, ts_map_t &map, ts_position_t &pos,int quality)
 {
 	double c, s, q;
 	double x2p, y2p;
 	int i, x1, y1, x2, y2, xp, yp, value;
 	double add, dist;
-	c=cos(pos->theta*M_PI / 180);
-	s=sin(pos->theta*M_PI / 180);
-	x1 = (int)floor(pos->x*TS_MAP_SCALE +0.5);
-	y1 = (int)floor(pos->y*TS_MAP_SCALE +0.5);
+	c=cos(pos.theta*M_PI / 180);
+	s=sin(pos.theta*M_PI / 180);
+	x1 = (int)floor(pos.x*TS_MAP_SCALE +0.5);
+	y1 = (int)floor(pos.y*TS_MAP_SCALE +0.5);
 	// Translate and rotate scan torobotposition
-	for( i = 0; i != scan->nb_points; i++) {
-		x2p = c*scan->x [i] - s*scan->y [i];
-		y2p = s*scan->x [i] + c*scan->y [i];
-		xp = (int)floor ((pos->x + x2p)*TS_MAP_SCALE + 0.5);
-		yp = (int)floor ((pos->y + y2p)*TS_MAP_SCALE + 0.5);
+	for( i = 0; i != scan.nb_points; i++) {
+		x2p = c*scan.x [i] - s*scan.y [i];
+		y2p = s*scan.x [i] + c*scan.y [i];
+		xp = (int)floor ((pos.x + x2p)*TS_MAP_SCALE + 0.5);
+		yp = (int)floor ((pos.y + y2p)*TS_MAP_SCALE + 0.5);
 		dist = sqrt(x2p*x2p + y2p*y2p);
 		add = TS_HOLE_WIDTH / 2 / dist;
-		x2p* = TS_MAP_SCALE*(1 + add);
-		y2p* = TS_MAP_SCALE*(1 + add);
-		x2 = (int)floor(pos->x*TS_MAP_SCALE + x2p + 0.5);
-		y2 = (int)floor(pos->y*TS_MAP_SCALE + y2p + 0.5);
-		if(scan->value[i] == TS_NO_OBSTACLE) {
+		x2p *= TS_MAP_SCALE*(1 + add);
+		y2p *= TS_MAP_SCALE*(1 + add);
+		x2 = (int)floor(pos.x*TS_MAP_SCALE + x2p + 0.5);
+		y2 = (int)floor(pos.y*TS_MAP_SCALE + y2p + 0.5);
+		if(scan.value[i] == TS_NO_OBSTACLE) {
 			q = quality / 2; 
 			value = TS_NO_OBSTACLE;
 		} else {
