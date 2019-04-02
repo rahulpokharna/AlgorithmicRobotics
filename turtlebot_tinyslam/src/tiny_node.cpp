@@ -10,6 +10,8 @@
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Vector3.h>
 #include <tf/transform_datatypes.h>
+#include "nav_msgs/MapMetaData.h"
+#include "nav_msgs/OccupancyGrid.h"
 
 
 // variables for public use
@@ -146,9 +148,12 @@ int main(int argc, char** argv){
 	ros::init(argc, argv, "tiny_node");
 	ros::NodeHandle n;
 	
+	 //sstm_ = node_.advertise<nav_msgs::MapMetaData>("map_metadata", 1, true);
+	ros::Publisher map_meta_publisher = n.advertise<nav_msgs::MapMetaData>("map_metadata", 1, true);
+	ros::Publisher occupancy_publsiher = n.advertise<nav_msgs::OccupancyGrid>("map", 1, true);
+	
 	ros::Subscriber odom_subscriber = n.subscribe("/odom", 1000, odomCallback);
 	ros::spinOnce();
-	
 	ros::Subscriber lidar_subscriber = n.subscribe("/scan", 1, laserCallback);
 	ROS_WARN("BEFORE MAP");
 	ros::Duration(1).sleep();
