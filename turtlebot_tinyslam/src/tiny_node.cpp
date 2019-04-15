@@ -3,9 +3,6 @@
 #include <turtlebot_tinyslam/turtlebot_tinyslam.h>
 #include "turtlebot_tinyslam.cpp"
 #include <stdint.h>
-#include <math.h>
-#include <cmath>
-#include <tf/transform_datatypes.h>
 #include <sensor_msgs/LaserScan.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Vector3.h>
@@ -27,13 +24,14 @@ std::vector<float> ranges_;
 double x_odom_, y_odom_;
 double theta_odom_; //radian
 double theta_odom_deg_; //degree
-
+bool is_moving = false;
 
 // Structs for tinySLAM, initialized to 0,0,0
 //ts_position_t pos = {0, 0, 0};
 ts_position_t pos_; //  = pos;
 ts_scan_t scan_; 
 ts_map_t map_;
+
 
  
 // TODO input all values and begin testing -- 
@@ -53,7 +51,7 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
         angle_max_ = laser_scan.angle_max;
         angle_increment_ = laser_scan.angle_increment;
         range_min_ = laser_scan.range_min;
-        range_max_ = laser_scan.range_max;
+        range_max_ = laser_scan.range_max; 
         // what is the index of the ping that is straight ahead?
         // BETTER would be to use transforms, which would reference how the LIDAR is mounted;
         // but this will do for simple illustration
@@ -66,6 +64,7 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
         ranges_ = laser_scan.ranges;
         // store intensities somewhere
         
+        ROS_INFO("LIDAR setup: num points = %d",nb_points_);
         scan_.nb_points = nb_points_;
         
         
@@ -84,27 +83,43 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
 	for(int i = 0; i < nb_points_; i++){
 		double angle_in_rad = angle_min_ + (i * angle_increment_);
 		
-		if(isnan(laser_scan.ranges[i])){ // check if is nan, maybe need to check inf?
+		if(isnan(laser_scan.ranges[i])){
+    //ROS_INFO("siny_cosp %d", siny_cosp);
+    //ROS_INFO("cosy_cosp %d", cosy_cosp);
+    
+    // Update value of the position struct
+	// pos_ = {x_odom_, y_od{ // check if is nan, maybe need to check inf?
 			scan_.value[i] = TS_NO_OBSTACLE;
 		}
 		else{
 			scan_.value[i] = TS_OBSTACLE;
-			scan_.x[i] = x_odom_ + (laser_scan.ranges[i] * cos(angle_in_rad));
-			scan_.y[i] = y_odom_ + (laser_scan.ranges[i] * sin(angle_in_rad)); 
+			scan_.x[i] = (20 + (laser_scan.ranges[i] * cos(angle_in_rad))) * 1000; // convert to mm    //x_odom_ +
+			scan_.y[i] = (20 + (laser_scan.ranges[i] * sin(angle_in_rad))) * 1000; // convert to mm   // y_odom_ + 
 		}
 		// Unsure if the x,y are in relation to the robot or the world, I will assume the world for now
 		
 	}
+//	if(is_moving)
+		ts_map_update(scan_, map_, pos_, 128);
+//	else
+	//	ROS_WARN("LiDAR not updateD");
 	// update the map with the new scan
-	ts_map_update(scan_, map_, pos_, 1);
 	
 }
 
 void odomCallback(const nav_msgs::Odometry& odom) {
+
+	if(abs(odom.twist.twist.linear.x) > 0.05 || abs(odom.twist.twist.angular.z) > 0.1){
+		is_moving = true;
+	} else {
+		is_moving = false;
+	}
 	//ROS_INFO("odom: [%f,%f]", odom.twist.twist.linear.x, odom.pose.pose.position.y);
 
-	x_odom_ = odom.pose.pose.position.x;
-	y_odom_ = odom.pose.pose.position.y;
+
+	// Maybe here we add some offset to make it line up with the map properly
+	x_odom_ = odom.pose.pose.position.x + 20;
+	y_odom_ = odom.pose.pose.position.y + 20;
 	
 	//ROS_INFO("x position: %d", x_odom_);
 	///ROS_INFO("y position: %d", y_odom_);
@@ -142,25 +157,99 @@ void odomCallback(const nav_msgs::Odometry& odom) {
 // on init, get values for laser scan, calculate max min, nb_points etc
 
 
+
 // define a main
 // in main, get laser scan, then convert it to x,y values iterating along each scan.
 int main(int argc, char** argv){
 	ros::init(argc, argv, "tiny_node");
 	ros::NodeHandle n;
 	
-	 //sstm_ = node_.advertise<nav_msgs::MapMetaData>("map_metadata", 1, true);
 	ros::Publisher map_meta_publisher = n.advertise<nav_msgs::MapMetaData>("map_metadata", 1, true);
-	ros::Publisher occupancy_publsiher = n.advertise<nav_msgs::OccupancyGrid>("map", 1, true);
-	
+	ros::Publisher occupancy_publisher = n.advertise<nav_msgs::OccupancyGrid>("map", 10, true);
 	ros::Subscriber odom_subscriber = n.subscribe("/odom", 1000, odomCallback);
-	ros::spinOnce();
 	ros::Subscriber lidar_subscriber = n.subscribe("/scan", 1, laserCallback);
+	ros::spinOnce();
+	ros::spinOnce();
+	ros::spinOnce();
 	ROS_WARN("BEFORE MAP");
 	ros::Duration(1).sleep();
 	ts_map_init(map_);
 	ROS_WARN("AFTER MAP");
+	
+	// define the initial message for occupancy grid
+	nav_msgs::OccupancyGrid occupancyGrid;
+	
+	//int counter for sequence
+	int count = 1;
+	occupancyGrid.header.seq = count;
+	ros::Time time = ros::Time::now();
+	occupancyGrid.header.stamp = time;
+	occupancyGrid.header.frame_id = "odom"; // maybe as /map
+
+
+	nav_msgs::MapMetaData mapMetaData;
+	// same as the timestamp in the header
+    // mapMetaData.map_load_time = time;
+	
+	// Values obtained from header
+	mapMetaData.resolution = TS_MAP_SCALE / 10; // / 1000;
+	mapMetaData.width = TS_MAP_SIZE;
+	mapMetaData.height = TS_MAP_SIZE;
+	
+	// we assume the start is 0,0,0,0?
+	geometry_msgs::Pose origin;
+	origin.position.x = -20;
+	origin.position.y = -20;
+	origin.position.z = 0;
+	
+	origin.orientation.x = 0;
+	origin.orientation.y = 0;
+	origin.orientation.z = 0;
+	origin.orientation.w = 1;
+	
+	// update value of the meta origin
+	mapMetaData.origin = origin;
+	
+	// store the metadata into the occupancy grid
+	occupancyGrid.info = mapMetaData;
+	
+	// set the data for the map in the occupancy grid
+	occupancyGrid.data = map_.map;
+
+	
+	// publish the data
+	map_meta_publisher.publish(mapMetaData);
+	occupancy_publisher.publish(occupancyGrid);
+	
+	// Get the header for timestamp and frame id stuff
+	// publish our own frame as well (particle filter stuff), but we will assign it to be odom for now
+	
+	
 	// in while(ros::ok()){
 	// have a sleep timer that periodically calls for updates, or check for new data
-	ros::spin();
+	while(ros::ok()){
+						
+		// we need to add the compare of lazer scans
+		
+		// store the metadata into the occupancy grid
+		// occupancyGrid.info = mapMetaData;
+	
+		// set the data for the map in the occupancy grid
+		occupancyGrid.data = map_.map;
+		
+		count++;
+		
+		occupancyGrid.header.seq = count;
+		
+		ros::Time time = ros::Time::now();
+		occupancyGrid.header.stamp = time;
+		
+		// update the values of the published occumancy grid
+		occupancy_publisher.publish(occupancyGrid);
+		
+		ros::Duration(2).sleep();
+		ros::spinOnce();
+		
+	}
 
 }

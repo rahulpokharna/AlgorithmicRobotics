@@ -10,7 +10,9 @@ int ts_distance_scan_to_map(ts_scan_t &scan, ts_map_t &map, ts_position_t &pos)
 	double c, s;
 	int i, x, y, nb_points = 0;
 	int64_t sum;
-
+	
+	
+	
 	c = cos(pos.theta * M_PI / 180);
 	s = sin(pos.theta * M_PI / 180);
 
@@ -34,12 +36,16 @@ int ts_distance_scan_to_map(ts_scan_t &scan, ts_map_t &map, ts_position_t &pos)
 
 void ts_map_init(ts_map_t &map)
 {
+	std::vector<signed char> map2(TS_MAP_SIZE * TS_MAP_SIZE);
+	map.map = map2;
+	
 	int x, y, initval;
-	ts_map_pixel_t *ptr;
+	// ts_map_pixel_t *ptr;
 	initval = (TS_OBSTACLE + TS_NO_OBSTACLE) / 2;
-	for(ptr = map.map, y = 0; y < TS_MAP_SIZE; y++) {
-		for(x = 0; x < TS_MAP_SIZE; x++, ptr++) {
-			*ptr = initval;
+	for( y = 0; y < TS_MAP_SIZE; y++) { //ptr = map.map,
+		for(x = 0; x < TS_MAP_SIZE; x++) { // , ptr++
+			// *ptr = initval;
+			map.map[x + y*TS_MAP_SIZE] = initval;
 		}
 	}
 }
@@ -50,7 +56,7 @@ void ts_map_laser_ray(ts_map_t &map, int x1, int y1, int x2, int y2, int xp, int
 	int x2c, y2c, dx, dy, dxc, dyc, error, errorv, derrorv, x;
 	int incv, sincv, incerrorv, incptrx, incptry, pixval, horiz, diago;
 	
-	ts_map_pixel_t *ptr; 
+	int ptr; 
 	if( x1 < 0 || x1 >= TS_MAP_SIZE || y1 < 0 || y1 >= TS_MAP_SIZE)
 		return; // Robot is out of map
 	
@@ -98,9 +104,9 @@ void ts_map_laser_ray(ts_map_t &map, int x1, int y1, int x2, int y2, int xp, int
 	errorv = derrorv / 2;
 	incv = (value-TS_NO_OBSTACLE) /derrorv;
 	incerrorv = value-TS_NO_OBSTACLE-derrorv*incv;
-	ptr = map.map + y1*TS_MAP_SIZE + x1;
+	ptr = y1*TS_MAP_SIZE + x1; // equivalent to ptr is looking at map.map[y1*TS_MAP_SIZE + x1]
 	pixval = TS_NO_OBSTACLE;
-	for(x = 0; x <= dxc; x++, ptr += incptrx) {
+	for(x = 0; x <= dxc; x++, ptr += incptrx) { //  at each round, increment how far in by 
 		if(x > dx-2*derrorv) {
 			if(x <= dx-derrorv) {
 				pixval += incv;
@@ -119,8 +125,10 @@ void ts_map_laser_ray(ts_map_t &map, int x1, int y1, int x2, int y2, int xp, int
 				}
 			}
 		}
+		
+		// update pixel value at x y
 		// Integration into the map
-		*ptr = ((256-alpha)*(*ptr) + alpha*pixval) >> 8;
+		map.map[ptr] = ((256-alpha)*(map.map[ptr]) + alpha*pixval) >> 8;
 		if(error > 0) {
 			ptr += incptry;
 			error += diago;
@@ -139,18 +147,35 @@ void ts_map_update(ts_scan_t &scan, ts_map_t &map, ts_position_t &pos,int qualit
 	s=sin(pos.theta*M_PI / 180);
 	x1 = (int)floor(pos.x*TS_MAP_SCALE +0.5);
 	y1 = (int)floor(pos.y*TS_MAP_SCALE +0.5);
-	// Translate and rotate scan torobotposition
+	// Translate and rotate scan to robot position
+	
+	ROS_INFO("X, Y of robot: %f, %f", pos.x, pos.y);
 	for( i = 0; i != scan.nb_points; i++) {
-		x2p = c*scan.x [i] - s*scan.y [i];
-		y2p = s*scan.x [i] + c*scan.y [i];
-		xp = (int)floor ((pos.x + x2p)*TS_MAP_SCALE + 0.5);
-		yp = (int)floor ((pos.y + y2p)*TS_MAP_SCALE + 0.5);
+		
+		// this changes the entire way that it is processed, it is all done ahead of time
+		x2p = scan.x[i]; // c*scan.x [i] - s*scan.y [i];
+		y2p = scan.y[i]; //s*scan.x [i] + c*scan.y [i];
+		
+		xp = (int)floor((pos.x + x2p)*TS_MAP_SCALE + 0.5);
+		yp = (int)floor((pos.y + y2p)*TS_MAP_SCALE + 0.5);
+		
+		// alternative way to get xp, yp, this fix helped
+		// xp = (int)floor((pos.x + scan.x[i])*TS_MAP_SCALE + 0.5);
+		// yp = (int)floor((pos.y + scan.y[i])*TS_MAP_SCALE + 0.5);
+		
+		
 		dist = sqrt(x2p*x2p + y2p*y2p);
 		add = TS_HOLE_WIDTH / 2 / dist;
 		x2p *= TS_MAP_SCALE*(1 + add);
 		y2p *= TS_MAP_SCALE*(1 + add);
 		x2 = (int)floor(pos.x*TS_MAP_SCALE + x2p + 0.5);
 		y2 = (int)floor(pos.y*TS_MAP_SCALE + y2p + 0.5);
+		
+		// alternative calculation for xy, y2, this did not help as it is the same
+		//x2 = (int)floor(pos.x*TS_MAP_SCALE + x2p + 0.5);
+		//y2 = (int)floor(pos.y*TS_MAP_SCALE + y2p + 0.5);
+		
+		
 		if(scan.value[i] == TS_NO_OBSTACLE) {
 			q = quality / 2; 
 			value = TS_NO_OBSTACLE;
