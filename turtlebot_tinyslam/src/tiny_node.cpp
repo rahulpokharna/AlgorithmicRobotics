@@ -21,6 +21,9 @@ double range_max_ = 0.0;
 int nb_points_ = 0;
 std::vector<float> ranges_;
 
+int origin_offset = 20;
+
+
 double x_odom_, y_odom_;
 double theta_odom_; //radian
 double theta_odom_deg_; //degree
@@ -93,8 +96,8 @@ void laserCallback(const sensor_msgs::LaserScan& laser_scan) {
 		}
 		else{
 			scan_.value[i] = TS_OBSTACLE;
-			scan_.x[i] = (20 + (laser_scan.ranges[i] * cos(angle_in_rad))) * 1000; // convert to mm    //x_odom_ +
-			scan_.y[i] = (20 + (laser_scan.ranges[i] * sin(angle_in_rad))) * 1000; // convert to mm   // y_odom_ + 
+			scan_.x[i] = (x_odom_ + (laser_scan.ranges[i] * cos(angle_in_rad))) * 1000; // convert to mm   
+			scan_.y[i] = (y_odom_ + (laser_scan.ranges[i] * sin(angle_in_rad))) * 1000; // convert to mm
 		}
 		// Unsure if the x,y are in relation to the robot or the world, I will assume the world for now
 		
@@ -118,8 +121,8 @@ void odomCallback(const nav_msgs::Odometry& odom) {
 
 
 	// Maybe here we add some offset to make it line up with the map properly
-	x_odom_ = odom.pose.pose.position.x + 20;
-	y_odom_ = odom.pose.pose.position.y + 20;
+	x_odom_ = odom.pose.pose.position.x + origin_offset;
+	y_odom_ = odom.pose.pose.position.y + origin_offset;
 	
 	//ROS_INFO("x position: %d", x_odom_);
 	///ROS_INFO("y position: %d", y_odom_);
@@ -198,8 +201,8 @@ int main(int argc, char** argv){
 	
 	// we assume the start is 0,0,0,0?
 	geometry_msgs::Pose origin;
-	origin.position.x = -20;
-	origin.position.y = -20;
+	origin.position.x = -(origin_offset);
+	origin.position.y = -(origin_offset);
 	origin.position.z = 0;
 	
 	origin.orientation.x = 0;
